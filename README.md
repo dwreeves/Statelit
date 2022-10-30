@@ -32,9 +32,16 @@ Reasons to use **Statelit**:
    Statelit makes this much easier.
 
 _(Note: Statelit is still under development.
-The current verison is `0.0.1`;
-the first stable release will be version `0.1.0`.
-The main thing still missing from Statelit is validation error handling.)_
+The current verison is `0.0.2`;
+the first stable release will be version `0.1.0`.)_
+
+# Install
+
+Via pip:
+
+```shell
+pip install statelit
+```
 
 # Example
 

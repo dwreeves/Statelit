@@ -10,6 +10,7 @@ from typing import overload
 
 import streamlit as st
 from pydantic import BaseModel
+from pydantic import ValidationError
 from streamlit.runtime.state.session_state import SessionState
 from typing_extensions import Literal
 
@@ -78,16 +79,29 @@ class StateManager(Generic[ModelInstanceType]):
 
     def apply_field_delta(self, key: str, field_name: str):
         data = {}
-        for fn, field in self.statelit_model.fields.items():
-            if fn != field_name:
-                data[fn] = field.from_streamlit(self.session_state[field.base_state_key])
-            else:
-                data[fn] = field.from_streamlit(self.session_state[key])
-        self.statelit_model.value = self.statelit_model.value.__class__(**data)
+        original = self.statelit_model.value
+        try:
+            for fn, field in self.statelit_model.fields.items():
+                if fn != field_name:
+                    data[fn] = field.from_streamlit(self.session_state[field.base_state_key])
+                else:
+                    data[fn] = field.from_streamlit(self.session_state[key])
+            pydantic_obj = self.statelit_model.value.__class__(**data)
+            self.statelit_model.value = pydantic_obj
+        except ValidationError as e:
+            st.error(e)
+            self.statelit_model.value = original
 
     def apply_obj_delta(self, key: str):
-        raw_json: str = self.session_state[key]
-        self.statelit_model.value = self.statelit_model.from_streamlit(raw_json)
+        original = self.statelit_model.value
+        try:
+            raw_json: str = self.session_state[key]
+            pydantic_obj = self.statelit_model.from_streamlit(raw_json)
+        except ValidationError as e:
+            st.error(e)
+            self.statelit_model.value = original
+        else:
+            self.statelit_model.value = pydantic_obj
 
     def _widget(
             self,
@@ -224,8 +238,11 @@ class StateManager(Generic[ModelInstanceType]):
             kwargs["label"] = self.statelit_model.value.__class__.__name__
 
         def apply_delta():
-            self.statelit_model.value = self.statelit_model.value.parse_raw(self.session_state[key])
-            self.session_state[key] = self.session_state[self.base_state_key]
+            try:
+                self.statelit_model.value = self.statelit_model.value.parse_raw(self.session_state[key])
+                self.session_state[key] = self.session_state[self.base_state_key]
+            except ValidationError as e:
+                st.error(e)
 
         if "on_click" in kwargs:
             apply_delta = chain_two_callables(apply_delta, kwargs.pop("on_click"))

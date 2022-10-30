@@ -13,11 +13,11 @@ theme:
     scheme: default
     primary: black
     accent: light blue
-  logo: img/statelit-logo.png
-  favicon: img/statelit-logo-favicon.png
-  font:
-    text: Opens Sans
-    code: Roboto Mono
+#  logo: img/statelit-logo.png
+#  favicon: img/statelit-logo-small.png
+#  font:
+#    text: Opens Sans
+#    code: Roboto Mono
 plugins:
   - macros
 markdown_extensions:
@@ -33,6 +33,6 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/dwreeves/Flask-Postgres
+      link: https://github.com/dwreeves/Statelit
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/in/daniel-reeves-27700545/
