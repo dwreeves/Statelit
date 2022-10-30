@@ -1,0 +1,38 @@
+site_name: Statelit
+site_url: https://dwreeves.github.io/Statelit/
+site_description: Docs for Statelit
+site_author: Daniel Reeves
+repo_url: https://github.com/dwreeves/Statelit/
+repo_name: Statelit
+docs_dir: src
+nav:
+- Home: pages/index.md
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: black
+    accent: light blue
+  logo: img/statelit-logo.png
+  favicon: img/statelit-logo-favicon.png
+  font:
+    text: Opens Sans
+    code: Roboto Mono
+plugins:
+  - macros
+markdown_extensions:
+- admonition
+- pymdownx.tabbed
+- pymdownx.keys
+- pymdownx.details
+- pymdownx.inlinehilite
+- pymdownx.superfences
+- markdown_include.include:
+    base_path: docs
+- sane_lists
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/dwreeves/Flask-Postgres
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/in/daniel-reeves-27700545/

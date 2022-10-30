@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+function setup {
+	python -m venv venv
+	source venv/bin/activate
+	venv/bin/pip install --upgrade pip
+	venv/bin/pip install flit
+	venv/bin/flit install --deps develop --symlink
+	venv/bin/pre-commit install
+	echo "All done! Please restart your terminal."
+}
+
+function build {
+	flit build
+}
+
+function publish {
+	flit publish
+}
+
+function lint {
+  flakeheaven lint
+  isort --check-only statelit/ tests/
+}
+
+function test {
+	python -m pytest
+}
+
+function help {
+    echo "$0 <task> <args>"
+    echo "Tasks:"
+    compgen -A function | cat -n
+}
+
+TIMEFORMAT=$'\nTask completed in %3lR'
+time "${@:-help}"

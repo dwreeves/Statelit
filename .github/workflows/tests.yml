@@ -1,0 +1,34 @@
+name: tests
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Note: 3.7.x gets stuck pip installing in the CI for some reason.
+        # Python 3.7 should still be considered 'supported', despite the CI not running it.
+        # This should be fixed at some point.
+        python: [3.8.x, 3.9.x, 3.10.x]
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python }}
+        architecture: x64
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install python-dev libpq-dev
+        chmod +x ./run
+        ./run setup
+    - name: Lint
+      run: source venv/bin/activate && ./run lint
+    - name: Test
+      run: source venv/bin/activate && ./run test
