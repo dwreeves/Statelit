@@ -6,18 +6,18 @@ repo_url: https://github.com/dwreeves/Statelit/
 repo_name: Statelit
 docs_dir: src
 nav:
-- Home: pages/index.md
+- Home: index.md
 theme:
   name: material
   palette:
     scheme: default
     primary: black
     accent: light blue
-#  logo: img/statelit-logo.png
-#  favicon: img/statelit-logo-small.png
-#  font:
-#    text: Opens Sans
-#    code: Roboto Mono
+  logo: img/statelit-logo.png
+  favicon: img/statelit-logo-favicon.png
+  font:
+    text: Opens Sans
+    code: Roboto Mono
 plugins:
   - macros
 markdown_extensions:

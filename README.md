@@ -3,7 +3,7 @@
     <img src="https://github.com/dwreeves/statelit/workflows/docs/badge.svg" alt="Docs badge">
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/dwreeves/statelit/main/docs/src/img/statelit-logo.png" alt="Statelit logo">
+    <img src="https://raw.githubusercontent.com/dwreeves/statelit/main/docs/src/img/statelit-banner.png" alt="Statelit logo">
 </p>
 <p align="center">
     <em>Easy state management in Streamlit with Pydantic.</em>
