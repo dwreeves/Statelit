@@ -32,13 +32,15 @@ requires-python = ">=3.7"
 
 [tool.flit.metadata.requires-extra]
 test = [
-    "pandas",
     "pre-commit",
     "pytest",
     "pytest-cov",
     "isort",
     "flake8",
-    "flakeheaven>3"
+    "flakeheaven>3",
+
+    # Supported third party libraries
+    "pandas"
 ]
 doc = [
     "mkdocs",

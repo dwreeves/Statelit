@@ -1,4 +1,3 @@
-
 import streamlit as st
 from pydantic import BaseModel
 
@@ -139,13 +138,20 @@ Statelit makes writing interactive dashboards much easier.
 with st.expander("Code", expanded=True):
     st.code(r"""from datetime import date
 from enum import Enum
+from typing import Dict
+from typing import List
 
 import streamlit as st
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic.color import Color
 from pydantic import conint
+from pydantic.color import Color
+
 from statelit import StateManager
+from statelit.types import DateRange
+
+class SmallModel(BaseModel):
+    a: int = 100
 
 PositiveInt = conint(gt=0)
 
@@ -154,49 +160,43 @@ class ExampleEnum(int, Enum):
     BAR = 2
     BAZ = 3
 
-
-class SmallModel(BaseModel):
-    a: int = 100
-
-
 class BigExample(BaseModel):
+
     flag: bool = True
+
     example_enum_field: ExampleEnum = 2
+
+    date_range_field: DateRange = ["2022-03-14", "2022-07-04"]
+
+    json_data: Dict[str, List[int]] = {"some_key": [4, 5, 6]}
+
     positive_int: PositiveInt = 7
-    constrained_int: int = Field(
-        default=3,
-        ge=0,
-        le=10,
-        description="Must be 0 to 10."
-    )
-    large_text: str = (
-        "Including a new line in the default"
-        "\n"
-        "causes a `text_area` to appear"
-    )
+    constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
+
+    large_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
     very_large_text: str = Field(
         title="Very Large Text Area",
         default="Statelit hooks into a lot of Pydantic internals."
                 "\nCheck out all the neat things you can do with Statelit!",
         streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
-        description="Find this description of the Pydantic field"
-                     " in the 'help' text for this widget!"
+        description="Find this description of the Pydantic field in the 'help' text for this widget!"
     )
+
     some_date: date = date(2015, 3, 14)
     some_color: Color = "olive"
 
     some_pydantic_model: SmallModel = SmallModel()
 
-
 big_state_manager = StateManager(BigExample)
 
 st.text("Let's generate a big form! 🙂")
-big_state = big_state_manager.form()
-""")
+big_state = big_state_manager.form()""")
 
 with st.expander("Form"):
     from datetime import date
     from enum import Enum
+    from typing import Dict
+    from typing import List
 
     import streamlit as st
     from pydantic import BaseModel
@@ -205,6 +205,7 @@ with st.expander("Form"):
     from pydantic.color import Color
 
     from statelit import StateManager
+    from statelit.types import DateRange
 
     class SmallModel(BaseModel):
         a: int = 100
@@ -217,9 +218,14 @@ with st.expander("Form"):
         BAZ = 3
 
     class BigExample(BaseModel):
+
         flag: bool = True
 
         example_enum_field: ExampleEnum = 2
+
+        date_range_field: DateRange = ["2022-03-14", "2022-07-04"]
+
+        json_data: Dict[str, List[int]] = {"some_key": [4, 5, 6]}
 
         positive_int: PositiveInt = 7
         constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
@@ -248,5 +254,10 @@ with st.expander("State (pretty)"):
     big_state_manager.code()
 
 
-with st.expander("State (text area)"):
+with st.expander("State (lazy text area)"):
+    st.markdown("Warning: `DateRange` type does not work with lazy text areas.")
     big_state_manager.lazy_text_area(height=300)
+
+
+with st.expander("State (eager text area)"):
+    big_state_manager.text_area(height=300)

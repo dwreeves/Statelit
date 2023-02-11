@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from datetime import datetime
 from datetime import time
@@ -7,6 +8,7 @@ from functools import partial
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Iterable
 from typing import Optional
 from typing import Type
 from typing import Union
@@ -21,6 +23,7 @@ from statelit.field_factory.base import is_from_streamlit_callback_converter_for
 from statelit.field_factory.base import is_to_streamlit_callback_converter_for
 from statelit.field_factory.base import is_widget_callback_converter_for
 from statelit.json import statelit_encoder
+from statelit.types import DateRange
 from statelit.utils.mro import find_implementation
 
 
@@ -107,6 +110,54 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             streamlit_widget,
             **kwargs
         )
+
+    @is_to_streamlit_callback_converter_for(types=[list, dict])
+    def _pre_convert_list_or_dict(
+            self,
+            value: int,
+            field: ModelField,
+            model: Type[BaseModel]
+    ):
+        def _convert(x):
+            return model.__config__.json_dumps(
+                x,
+                # indent=2,  # TODO: Figure out how to parametrize this
+                default=statelit_encoder,
+            )
+
+        return _convert
+
+    @is_widget_callback_converter_for(types=[list, dict])
+    def _convert_list_or_dict(
+            self,
+            value: int,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        kwargs = {}
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
+
+        streamlit_widget = _maybe_extract_streamlit_callable(field=field)
+
+        if streamlit_widget:
+            pass
+        else:
+            streamlit_widget = st.text_area
+
+        return partial(
+            streamlit_widget,
+            **kwargs
+        )
+
+    @is_from_streamlit_callback_converter_for(types=[list, dict])
+    def _post_convert_list_or_dict(
+            self,
+            value: int,
+            field: ModelField,
+            model: Type[BaseModel]
+    ):
+        return json.loads
 
     @is_widget_callback_converter_for(types=[str])
     def _convert_string(
@@ -350,23 +401,66 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     # Custom Statelit types
     # ==========================================================================
 
-    # @is_streamlit_callback_converter_for(types=[DateRange])
-    # def _convert_date_range(
-    #         self,
-    #         value: DateRange,
-    #         field: ModelField,
-    #         model: Type[BaseModel]
-    # ) -> callable:
-    #     kwargs = {}
-    #     kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=timedelta(days=1))
-    #     kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
-    #
-    #     if value[1] is None:
-    #         value = (parse_date(value.lower), )
-    #     else:
-    #         value = (parse_date(value.lower), parse_date(value.upper))
-    #
-    #     return partial(
-    #         st.date_input,
-    #         **kwargs
-    #     )
+    @is_widget_callback_converter_for(types=[DateRange])
+    def _convert_date_range(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        kwargs = {}
+        kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=timedelta(days=1))
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+
+        def remapped_keys(**kw):
+            # Unfortunately key=? does not work with a date range for st.date_input
+            # So we need to hack our way around it.
+            #
+            # Yes, this is extremely hacky. I know. Help me make it better? :)
+
+            key = kw.pop("key", None)
+
+            if key is not None:
+
+                stable_value_key = key + "._stable_value"
+
+                if st.session_state[key][1] is not None:
+                    # Pretend to be immutable
+                    st.session_state[stable_value_key] = DateRange.convert_to_streamlit(
+                        st.session_state[key],
+                        field=field,
+                        config=field.model_config,
+                        upper_is_optional=False
+                    )
+
+                out = st.date_input(**kw, value=st.session_state[stable_value_key])
+
+                if out != st.session_state[key]:
+                    st.session_state[key] = out
+                    on_change_callback = kw.pop("on_change")
+                    on_change_callback()
+                else:
+                    st.session_state[key] = out
+                return out
+            else:
+                return st.date_input(**kw)
+
+        return partial(remapped_keys, **kwargs)
+
+    @is_to_streamlit_callback_converter_for(types=[DateRange])
+    def _pre_date_range(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        return partial(DateRange.convert_to_streamlit, field=field, config=field.model_config)
+
+    @is_from_streamlit_callback_converter_for(types=[DateRange])
+    def _post_date_range(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        return partial(DateRange.validate, field=field, config=field.model_config)

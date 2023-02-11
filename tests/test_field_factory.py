@@ -14,6 +14,7 @@ from pydantic.color import Color
 import statelit.field_factory.main
 from statelit.field_factory.main import DefaultFieldFactory
 from statelit.state.base import StatefulObjectBase
+from statelit.types import DateRange
 
 
 class SubModel(BaseModel):
@@ -43,12 +44,15 @@ def field_factory(session_state):
         ((float, Field(default=123.4, ge=0.0)), "number_input"),
         ((float, Field(default=123.4, ge=0.0, le=1000.0)), "slider"),
         ((bool, True), "checkbox"),
+        ((list, ["a", "b"]), "text_area"),
+        ((dict, {"foo": "bar"}), "text_area"),
         ((BasicEnum, BasicEnum.A), "selectbox"),
         ((time, time(3, 14, 15)), "time_input"),
         ((date, date(1970, 3, 14)), "date_input"),
         ((datetime, datetime(1970, 3, 14, 15, 9, 26)), "date_input"),
         ((Color, "red"), "color_picker"),
         ((SubModel, SubModel()), "text_area"),
+        ((DateRange, ["2022-01-01", "2022-03-14"]), "date_input"),
     ]
 )
 def test_default_field_factory(field_definition, calls, field_factory):
@@ -58,7 +62,7 @@ def test_default_field_factory(field_definition, calls, field_factory):
     with patch.object(statelit.field_factory.main.st, calls) as mocked_func:
 
         statelit_obj: StatefulObjectBase = field_factory(
-            value=pydantic_obj.bar,
+            value=getattr(pydantic_obj, "bar"),
             field=pydantic_obj.__fields__["bar"],
             model=type(pydantic_obj)
         )

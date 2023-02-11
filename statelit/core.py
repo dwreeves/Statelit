@@ -27,6 +27,7 @@ class StateManager(Generic[ModelInstanceType]):
     statelit_model_class: Type[StatelitModel] = StatelitModel
     statelit_model: StatelitModel
     session_state: SessionState
+    error_message_emoji: str = "🙀"
 
     def __init__(
             self,
@@ -70,38 +71,38 @@ class StateManager(Generic[ModelInstanceType]):
     def sync(self, update_lazy: bool = True):
         self.statelit_model.sync(update_lazy=update_lazy)
 
-    def apply_session_state_delta(self, key: str):
-        if key in self.statelit_model.all_keys_generator:
-            self.apply_obj_delta(key=key)
-        for field_name, statelit_field in self.statelit_model.fields.items():
+    def apply_session_state_delta(self, key: str, parent: StatelitModel):
+        if key in parent.all_keys_generator:
+            self.apply_obj_delta(key=key, parent=parent)
+        for field_name, statelit_field in parent.fields.items():
             if key in statelit_field.all_keys_generator:
-                self.apply_field_delta(key, field_name)
+                self.apply_field_delta(key, field_name, parent=parent)
 
-    def apply_field_delta(self, key: str, field_name: str):
+    def apply_field_delta(self, key: str, field_name: str, parent: StatelitModel):
         data = {}
-        original = self.statelit_model.value
+        original = parent.value
         try:
-            for fn, field in self.statelit_model.fields.items():
-                if fn != field_name:
-                    data[fn] = field.from_streamlit(self.session_state[field.base_state_key])
+            for fn, field in parent.fields.items():
+                if fn == field_name:
+                    data[fn] = field.from_streamlit(parent.session_state[key])
                 else:
-                    data[fn] = field.from_streamlit(self.session_state[key])
-            pydantic_obj = self.statelit_model.value.__class__(**data)
-            self.statelit_model.value = pydantic_obj
-        except ValidationError as e:
-            st.error(e)
-            self.statelit_model.value = original
+                    data[fn] = field.from_streamlit(parent.session_state[field.base_state_key])
+            pydantic_obj = parent.value.__class__(**data)
+            parent.value = pydantic_obj
+        except Exception as e:
+            st.error(e, icon=self.error_message_emoji)
+            parent.value = original
 
-    def apply_obj_delta(self, key: str):
-        original = self.statelit_model.value
+    def apply_obj_delta(self, key: str, parent: StatelitModel):
+        original = parent.value
         try:
-            raw_json: str = self.session_state[key]
-            pydantic_obj = self.statelit_model.from_streamlit(raw_json)
+            raw_json: str = parent.session_state[key]
+            pydantic_obj = parent.from_streamlit(raw_json)
         except ValidationError as e:
-            st.error(e)
-            self.statelit_model.value = original
+            st.error(e, icon=self.error_message_emoji)
+            parent.value = original
         else:
-            self.statelit_model.value = pydantic_obj
+            parent.value = pydantic_obj
 
     def _widget(
             self,
@@ -123,7 +124,7 @@ class StateManager(Generic[ModelInstanceType]):
 
         obj.commit_key(key=key, state_type="replicated")
 
-        apply_delta = partial(self.apply_session_state_delta, key=key)
+        apply_delta = partial(self.apply_session_state_delta, key=key, parent=obj.parent or obj)
 
         if "on_change" in kwargs:
             apply_delta = chain_two_callables(apply_delta, kwargs.pop("on_change"))
@@ -158,35 +159,44 @@ class StateManager(Generic[ModelInstanceType]):
 
     def _form(
             self,
-            obj: StatelitModel,
+            statelit_model: StatelitModel,
             key_suffix: Optional[str] = None,
             exclude: List[str] = None,
-            # flatten: bool = False
+            flatten: bool = False,
+            _header_level: str = "##"
     ):
-        for field_name, field in obj.fields.items():
-            # if flatten and isinstance(field, StatelitModel):
-            #     self._form(
-            #         obj=field,
-            #         key_suffix=key_suffix,
-            #         exclude=exclude
-            #     )
-            # elif field_name not in exclude:
+        for field_name, field in statelit_model.fields.items():
             if field_name not in exclude:
-                self._widget(field, key_suffix=key_suffix)
+                if flatten and isinstance(field, StatelitModel):
+                    _new_exclude = [
+                        ".".join(i.split(".")[1:])
+                        for i in exclude
+                        if i.startswith(f"{field_name}.")
+                    ]
+                    st.markdown(f"{_header_level} {field.name}")
+                    self._form(
+                        statelit_model=field,
+                        key_suffix=key_suffix,
+                        exclude=_new_exclude,
+                        flatten=flatten,
+                        _header_level=(_header_level + "#")[:6],
+                    )
+                else:
+                    self._widget(field, key_suffix=key_suffix)
 
     def form(
             self,
             key_suffix: Optional[str] = None,
             exclude: Optional[List[str]] = None,
-            # flatten: bool = False
+            flatten: bool = False
     ) -> ModelInstanceType:
         if not exclude:
             exclude = []
         self._form(
-            self.statelit_model,
+            statelit_model=self.statelit_model,
             key_suffix=key_suffix,
             exclude=exclude,
-            # flatten=flatten
+            flatten=flatten
         )
         return self.pydantic_obj
 
@@ -242,7 +252,7 @@ class StateManager(Generic[ModelInstanceType]):
                 self.statelit_model.value = self.statelit_model.value.parse_raw(self.session_state[key])
                 self.session_state[key] = self.session_state[self.base_state_key]
             except ValidationError as e:
-                st.error(e)
+                st.error(e, icon=self.error_message_emoji)
 
         if "on_click" in kwargs:
             apply_delta = chain_two_callables(apply_delta, kwargs.pop("on_click"))

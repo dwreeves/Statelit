@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import Dict
+from typing import List
 
 import pytest
 
@@ -73,6 +75,10 @@ def test_get_next_availble_key_hit_limit():
         (A, "A type"),
         (B, "B type"),
         (C, "A type"),
+        (dict, "dict type"),
+        (Dict[str, str], "dict type"),
+        (list, "list type"),
+        (List[int], "list type")
     ]
 )
 def test_find_implementation(input, expected_output):
@@ -85,7 +91,9 @@ def test_find_implementation(input, expected_output):
         str: "string type",
         Enum: "enum type",
         A: "A type",
-        B: "B type"
+        B: "B type",
+        dict: "dict type",
+        list: "list type"
     }
 
     output = find_implementation(input, registry=registry)

@@ -32,7 +32,7 @@ Reasons to use **Statelit**:
    Statelit makes this much easier.
 
 _(Note: Statelit is still under development.
-The current verison is `0.0.2`;
+The current verison is `0.0.3`;
 the first stable release will be version `0.1.0`.)_
 
 # Install
@@ -178,6 +178,9 @@ The following implementations are considered **experimental** and are potentiall
 |Type|Widget|Notes|
 |---|---|---|
 |`datetime.datetime`|`st.date_input`|Time component is always cast to `00:00:00`. For true datetimes, at the moment, it is suggested you use separate `datetime.date` and `datetime.time`s and manually combine them.|
+|`statelit.types.DateRange`|`st.date_input`|Custom type. Currently does not work with lazy state.|
+|`list`|`st.text_area`|Unclear if `list` will always be a text area in future versions.|
+|`dict`|`st.text_area`|Unclear if `dict` will always be a text area in future versions.|
 
 ## Notes on internals
 
@@ -210,6 +213,13 @@ A callback is a callable that comes in one of three types: it is either a `widge
 A converter is a callable that takes in `(value: Any, field: pydantic.fields.ModelField, model: pydantic.BaseModel)`, and returns a callback.
 
 A `FieldFactory` is a callable that takes in `(value: Any, field: pydantic.fields.ModelField, model: pydantic.BaseModel)`, and returns a `StatefulObjectBase`
+
+# Known Issues
+
+- Pydantic 2.x not supported.
+- `ValidationError`s are not handled right now and crash everything. They need to be handled gracefully.
+- `DateRange` type does not work with `lazy_text_area()`.
+- Using `flatten=True` for `StateManager.form()` does not sync with text areas and lazy text areas. (Flatten mode is still in development, and should be avoided if you are using text areas.)
 
 # Trademark & Copyright
 

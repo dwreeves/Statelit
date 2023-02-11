@@ -10,6 +10,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 from pydantic.fields import ModelField
 from pydantic.utils import Representation
+from pydantic.utils import lenient_issubclass
 from streamlit.runtime.state.session_state import SessionState
 from typing_extensions import Literal
 
@@ -181,7 +182,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             converter = self.callback_mapping(callback_type=callback_type, association_type="fields")[field.name]
         else:
             converter = find_implementation(
-                field.type_,
+                field.outer_type_,
                 self.callback_mapping(callback_type=callback_type, association_type="types")
             )
         if converter is not None:
@@ -199,7 +200,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
         if callback is None:
             raise TypeError(
                 f"Could not find a valid Streamlit callback for Field({field})."
-                f" Check to make sure that {field.type_!r} is a supported type."
+                f" Check to make sure that {field.outer_type_!r} is a supported type."
             )
         return callback
 
@@ -232,7 +233,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             field: ModelField,
             model: Type[BaseModel],
     ) -> Type[StatefulObjectBase]:
-        if issubclass(field.type_, BaseModel):
+        if lenient_issubclass(field.outer_type_, BaseModel):
             from statelit.state.model import StatelitModel
             return StatelitModel
         else:
@@ -244,6 +245,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             value: Any,
             field: ModelField,
             model: Type[BaseModel],
+            parent: Optional[StatefulObjectBase] = None
     ) -> ST:
         field_callbacks: FieldCallbacks = self.get_field_callbacks(value=value, model=model, field=field)
         base_state_key = f"{self.key_prefix}.{field.name}"
@@ -251,6 +253,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
         statelit_field = statelit_field_class(
             value=value,
             name=field.name,
+            parent=parent,
             base_state_key=base_state_key,
             widget_callback=field_callbacks.widget_callback,
             to_streamlit_callback=field_callbacks.to_streamlit_callback,

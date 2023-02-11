@@ -1,4 +1,4 @@
-# Most code here is pulled from functools.py
+# Most code here is mostly pulled from functools.py
 #
 # The C3 linearization algorithm resolves situations where types are subclassed.
 #
@@ -12,11 +12,16 @@
 # will pick str because Enum comes second in the hierarchy. So we do need to
 # override this behavior and manually pick Enums. In the future, there may be
 # a better option than this.
+#
+# Additionally, we want to make sure the typing module is supported, so some
+# cleanup is done on the type.
 
 
 from enum import Enum
 from typing import Dict
 from typing import TypeVar
+
+from pydantic.utils import get_origin
 
 
 T = TypeVar("T")
@@ -175,9 +180,15 @@ def _find_impl(cls: type, registry: Dict[type, T]) -> T:
 
 
 def find_implementation(cls: type, registry: Dict[type, T]) -> T:
+    origin = get_origin(cls)
+    if origin is not None:
+        cls = origin
+
+    # Give priority to Enum implementations
     if issubclass(cls, Enum):
         _sub_registry = {k: v for k, v in registry.items() if issubclass(k, Enum)}
         maybe_find_implementation = _find_impl(cls=cls, registry=_sub_registry)
         if maybe_find_implementation:
             return maybe_find_implementation
+
     return _find_impl(cls=cls, registry=registry)

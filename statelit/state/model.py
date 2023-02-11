@@ -34,6 +34,7 @@ class StatelitModel(StatefulObjectBase[ModelInstanceType]):
             value: ModelInstanceType,
             *,
             name: str = None,
+            parent: Optional["StatefulObjectBase"] = None,
             base_state_key: str = None,
             replicated_state_keys: Optional[List[str]] = None,
             lazy_state_keys: Optional[List[str]] = None,
@@ -48,6 +49,7 @@ class StatelitModel(StatefulObjectBase[ModelInstanceType]):
         super().__init__(
             value=value,
             name=name if name is not None else value.__class__.__name__,
+            parent=parent,
             base_state_key=base_state_key,
             replicated_state_keys=replicated_state_keys,
             lazy_state_keys=lazy_state_keys,
@@ -86,10 +88,10 @@ class StatelitModel(StatefulObjectBase[ModelInstanceType]):
             value = getattr(self.value, field_name)
             model = self.value.__class__
             field = self.value.__fields__[field_name]
-            fields_dict[field.name] = self.field_factory(value=value, field=field, model=model)
+            fields_dict[field.name] = self.field_factory(value=value, field=field, model=model, parent=self)
         self.fields = fields_dict
 
-    def sync(self, update_lazy: bool = False):
+    def sync(self, update_lazy: bool = True):
         super().sync(update_lazy=update_lazy)
         for field_name, field in self.fields.items():
             field.value = getattr(self.value, field_name)

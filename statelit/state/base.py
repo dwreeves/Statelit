@@ -24,9 +24,9 @@ T = TypeVar("T")
 
 class StatefulObjectBase(Generic[T]):
     _value: T
-    base_state_key: str
     replicated_state_keys: List[str]
     lazy_state_keys: List[str]
+    base_state_key: str
     session_state: Union[SessionState, SessionState]
 
     def __repr__(self):
@@ -37,6 +37,7 @@ class StatefulObjectBase(Generic[T]):
             value: T,
             *,
             name: str = None,
+            parent: Optional["StatefulObjectBase"] = None,
             base_state_key: str,
             replicated_state_keys: Optional[List[str]] = None,
             lazy_state_keys: Optional[List[str]] = None,
@@ -46,7 +47,9 @@ class StatefulObjectBase(Generic[T]):
             session_state: SessionState = None,
     ):
         self.name = name
+        self.parent = parent
         self.base_state_key = base_state_key
+        self.keys_list_key = base_state_key + "._keys"
         self.replicated_state_keys = replicated_state_keys or []
         self.lazy_state_keys = lazy_state_keys or []
 
@@ -111,20 +114,30 @@ class StatefulObjectBase(Generic[T]):
     def next_key(self) -> str:
         key_list = set(self.all_keys_generator)
         for i in range(100_000):
-            candidate_key = f"{self.base_state_key}.{i}"
+            candidate_key = f"{self.base_state_key}._state_ref.{i}"
             if candidate_key not in key_list:
                 return candidate_key
         else:
-            raise ValueError
+            raise ValueError(
+                "Really? Over 100k keys??"
+                " -- Either that, or a rare and unusual error has occurred."
+                " Please file a bug report if you see this"
+                " and are also sure you aren't doing anything too crazy."
+            )
 
     def sync(self, update_lazy: bool = True):
         validated_value = self.to_streamlit(self.value)
 
-        # log.debug(f"Syncing {self} with value {validated_value} and update_lazy={update_lazy}")
         log.debug(f"Syncing {self} with value {validated_value} and update_lazy={update_lazy}")
 
-        for key in [self.base_state_key] + self.replicated_state_keys:
-            self.session_state[key] = validated_value
+        # TODO:
+        #  Do we actually need to update self.replicated_state_keys????
+        #  Causes issues with DateRange type to do so.
+        #  I see no evidence so far that not updating replicated states leads to unintended consequences
+        # for key in [self.base_state_key] + self.replicated_state_keys:
+        #     self.session_state[key] = validated_value
+        self.session_state[self.base_state_key] = validated_value
+
         if update_lazy:
             for key in self.lazy_state_keys:
                 self.session_state[key] = validated_value
