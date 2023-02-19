@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Dict
 from typing import List
+from typing import Optional
 
 import pytest
 
@@ -78,7 +79,12 @@ def test_get_next_availble_key_hit_limit():
         (dict, "dict type"),
         (Dict[str, str], "dict type"),
         (list, "list type"),
-        (List[int], "list type")
+        (List[int], "list type"),
+        (Optional[int], "integer type"),
+        (Optional[A], "A type"),
+        (Optional[SomeIntEnum], "enum type"),
+        (Optional[Dict[str, str]], "dict type"),
+        (Optional[List[int]], "list type"),
     ]
 )
 def test_find_implementation(input, expected_output):

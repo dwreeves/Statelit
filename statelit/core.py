@@ -98,11 +98,10 @@ class StateManager(Generic[ModelInstanceType]):
         try:
             raw_json: str = parent.session_state[key]
             pydantic_obj = parent.from_streamlit(raw_json)
+            parent.value = pydantic_obj
         except ValidationError as e:
             st.error(e, icon=self.error_message_emoji)
             parent.value = original
-        else:
-            parent.value = pydantic_obj
 
     def _widget(
             self,
@@ -135,8 +134,11 @@ class StateManager(Generic[ModelInstanceType]):
             **kwargs,
         )
 
-        if validate_output:
-            value = obj.from_streamlit(value)
+        try:
+            if validate_output:
+                value = obj.from_streamlit(value)
+        except Exception as e:
+            st.error(e, icon=self.error_message_emoji)
 
         return value
 

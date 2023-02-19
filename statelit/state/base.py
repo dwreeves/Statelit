@@ -24,10 +24,8 @@ T = TypeVar("T")
 
 class StatefulObjectBase(Generic[T]):
     _value: T
-    replicated_state_keys: List[str]
-    lazy_state_keys: List[str]
-    base_state_key: str
-    session_state: Union[SessionState, SessionState]
+    _initial_value: T
+    # _enabled: bool
 
     def __repr__(self):
         return f"{self.__class__.__name__}(value={self._value!r}, base_state_key={self.base_state_key!r})"
@@ -37,6 +35,7 @@ class StatefulObjectBase(Generic[T]):
             value: T,
             *,
             name: str = None,
+            enabled: bool = True,
             parent: Optional["StatefulObjectBase"] = None,
             base_state_key: str,
             replicated_state_keys: Optional[List[str]] = None,
@@ -49,9 +48,8 @@ class StatefulObjectBase(Generic[T]):
         self.name = name
         self.parent = parent
         self.base_state_key = base_state_key
-        self.keys_list_key = base_state_key + "._keys"
-        self.replicated_state_keys = replicated_state_keys or []
-        self.lazy_state_keys = lazy_state_keys or []
+        self.replicated_state_keys: List[str] = replicated_state_keys or []
+        self.lazy_state_keys: List[str] = lazy_state_keys or []
 
         if widget_callback is not None:
             self.widget = widget_callback
@@ -64,17 +62,51 @@ class StatefulObjectBase(Generic[T]):
 
         if session_state is None:
             session_state = st.session_state
-        self.session_state = session_state
+        self.session_state: SessionState = session_state
+
+        # self.enabled = enabled
+        # if self.enabled_key not in self.session_state:
+        #     self.session_state[self.enabled_key] = enabled
+
+        self.set_initial_value(value)
 
         self._value = value
         if self.base_state_key not in self.session_state:
             self.session_state[self.base_state_key] = self.to_streamlit(value)
 
-    def from_streamlit(self, v: Any) -> Any:
+    def widget(self, **kwargs) -> Any:
+        raise NotImplementedError
+
+    def from_streamlit(self, v: Any) -> T:
         return v
 
-    def to_streamlit(self, v: Any) -> Any:
+    def to_streamlit(self, v: T) -> Any:
         return v
+
+    def set_initial_value(self, value: T):
+        """
+        The initial value uses st.session_state.
+        This is required in the case of an Optional[BaseModel].
+        We still want to persist downstream fields in that situation.
+        If we don't, things get weird.
+        """
+        initial_state_key = f"{self.base_state_key}._initial_value"
+        if initial_state_key not in self.session_state:
+            self._initial_value = self.session_state[initial_state_key] = value
+        else:
+            self._initial_value = self.session_state[initial_state_key]
+
+    # @property
+    # def enabled_key(self) -> str:
+    #     return f"{self.base_state_key}._enabled"
+    #
+    # @property
+    # def enabled(self) -> bool:
+    #     return self._enabled
+    #
+    # @enabled.setter
+    # def enabled(self, v: bool) -> None:
+    #     self._enabled = self.session_state[self.enabled_key] = v
 
     @property
     def value(self) -> T:
@@ -137,7 +169,6 @@ class StatefulObjectBase(Generic[T]):
         # for key in [self.base_state_key] + self.replicated_state_keys:
         #     self.session_state[key] = validated_value
         self.session_state[self.base_state_key] = validated_value
-
         if update_lazy:
             for key in self.lazy_state_keys:
                 self.session_state[key] = validated_value

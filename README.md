@@ -146,6 +146,8 @@ Renders the JSON state as a text field. The JSON can be modified, and changing i
 
 ### `StatelitModel().lazy_text_area()`
 
+**NOTE: This feature is buggy. Use at your own peril. Known bugs are that it does not work with Optional[T] and `statelit.types.DateRange`.**
+
 Renders the JSON state as a "lazy" text field. The JSON can be modified, but changes won't be saved until the "Apply" button is pressed.
 
 **Parameters:**
@@ -218,7 +220,7 @@ A `FieldFactory` is a callable that takes in `(value: Any, field: pydantic.field
 
 - Pydantic 2.x not supported.
 - `ValidationError`s are not handled right now and crash everything. They need to be handled gracefully.
-- `DateRange` type does not work with `lazy_text_area()`.
+- `DateRange` type and `Optional[T]` do not currently work with `lazy_text_area()`. Sorry about that.
 - Using `flatten=True` for `StateManager.form()` does not sync with text areas and lazy text areas. (Flatten mode is still in development, and should be avoided if you are using text areas.)
 
 # Trademark & Copyright

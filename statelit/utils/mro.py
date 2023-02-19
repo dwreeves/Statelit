@@ -20,11 +20,22 @@
 from enum import Enum
 from typing import Dict
 from typing import TypeVar
+from typing import Union
 
+from pydantic.utils import get_args
 from pydantic.utils import get_origin
 
 
 T = TypeVar("T")
+
+
+def extract_type_from_optional(cls: type) -> type:
+    """If cls == Optional[T], return T. Else return cls"""
+    if get_origin(cls) is Union:
+        new_types = list(filter(lambda _: _ is not type(None), get_args(cls)))  # noqa: E721
+        if len(new_types) == 1:
+            return new_types[0]
+    return cls
 
 
 def _c3_merge(sequences):
@@ -180,6 +191,8 @@ def _find_impl(cls: type, registry: Dict[type, T]) -> T:
 
 
 def find_implementation(cls: type, registry: Dict[type, T]) -> T:
+    cls = extract_type_from_optional(cls)
+
     origin = get_origin(cls)
     if origin is not None:
         cls = origin

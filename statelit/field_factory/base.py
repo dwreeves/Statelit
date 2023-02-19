@@ -31,7 +31,7 @@ class StatelitConverterAssociation(Representation):
     def __init__(
             self,
             converter_name: str,
-            callback_type: Literal["widget", "to_streamlit", "from_streamlit"],
+            callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"],
             fields: List[str] = None,
             types: List[type] = None
     ):
@@ -88,7 +88,7 @@ class CallbackConverterType(metaclass=CallbackConverterTypeMeta):
 
 
 def is_converter_for(
-        callback_type: Literal["widget", "to_streamlit", "from_streamlit"],
+        callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"],
         *,
         fields: List[str] = None,
         types: List[type] = None
@@ -140,6 +140,21 @@ def is_to_streamlit_callback_converter_for(
     )
 
 
+# This probably shouldn't be returning a callable;
+# It can just return the value directly.
+# However, this is just an artifact of the design of the code.
+# I want to maybe fix this at a later date.
+def is_fallback_default_value_converter_for(
+        fields: List[str] = None,
+        types: List[type] = None
+) -> Callable[[callable], CallbackConverterType]:
+    return is_converter_for(
+        "fallback_default_value",
+        fields=fields,
+        types=types
+    )
+
+
 class DynamicFieldFactoryBase(FieldFactoryBase):
     statelit_converter_associations: List[StatelitConverterAssociation]
 
@@ -162,7 +177,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             self,
             *,
             association_type: Literal["fields", "types"],
-            callback_type: Literal["widget", "to_streamlit", "from_streamlit"]
+            callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"]
     ) -> Dict[Any, callable]:
         d: Dict[str, callable] = {}
         for assoc in self.statelit_converter_associations:
@@ -176,7 +191,7 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             value: Any,
             field: ModelField,
             model: Type[BaseModel],
-            callback_type: Literal["widget", "to_streamlit", "from_streamlit"]
+            callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"]
     ) -> Optional[callable]:
         if field.name in self.callback_mapping(callback_type=callback_type, association_type="fields"):
             converter = self.callback_mapping(callback_type=callback_type, association_type="fields")[field.name]
@@ -187,6 +202,18 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
             )
         if converter is not None:
             return converter(value=value, field=field, model=model)
+        else:
+            return None
+
+    def get_fallback_default_value(self, value: Any, field: ModelField, model: Type[BaseModel]) -> Any:
+        callback = self.get_callback_by_type(
+            value=value,
+            field=field,
+            model=model,
+            callback_type="fallback_default_value"
+        )
+        if callback is not None:
+            return callback()
         else:
             return None
 
@@ -250,9 +277,15 @@ class DynamicFieldFactoryBase(FieldFactoryBase):
         field_callbacks: FieldCallbacks = self.get_field_callbacks(value=value, model=model, field=field)
         base_state_key = f"{self.key_prefix}.{field.name}"
         statelit_field_class = self.get_object_type(value=value, model=model, field=field)
+        if value is None:
+            value = self.get_fallback_default_value(value=value, model=model, field=field)
+            enabled = False
+        else:
+            enabled = True
         statelit_field = statelit_field_class(
             value=value,
             name=field.name,
+            enabled=enabled,
             parent=parent,
             base_state_key=base_state_key,
             widget_callback=field_callbacks.widget_callback,

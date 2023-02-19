@@ -135,11 +135,13 @@ The purpose of this section is to go a little crazy and show you everything Stat
 Statelit makes writing interactive dashboards much easier.
 """)
 
-with st.expander("Code", expanded=True):
+with st.expander("Code", expanded=False):
     st.code(r"""from datetime import date
+from decimal import Decimal
 from enum import Enum
 from typing import Dict
 from typing import List
+from typing import Optional
 
 import streamlit as st
 from pydantic import BaseModel
@@ -172,20 +174,29 @@ class BigExample(BaseModel):
 
     positive_int: PositiveInt = 7
     constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
+    very_precise_decimal: Decimal = Decimal("1.23456")
+    undefined_int: Optional[int] = Field(
+        default=None,
+        description="It is _not_ recommended that you leave default values undefined,"
+                    " e.g. `some_field: Optional[int] = None`, or simply `some_field: Optional[int]`."
+                    " That said, Statelit will still try to assign a reasonable default value"
+                    " if the default is `None`."
+    )
 
-    large_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
+    large_optional_text: Optional[str] = "Including a new line in the default\ncauses a `text_area` to appear"
     very_large_text: str = Field(
         title="Very Large Text Area",
         default="Statelit hooks into a lot of Pydantic internals."
                 "\nCheck out all the neat things you can do with Statelit!",
-        streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+        statelit__streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+        statelit__disabled=True,
         description="Find this description of the Pydantic field in the 'help' text for this widget!"
     )
 
     some_date: date = date(2015, 3, 14)
     some_color: Color = "olive"
 
-    some_pydantic_model: SmallModel = SmallModel()
+    some_pydantic_model: Optional[SmallModel] = SmallModel()
 
 big_state_manager = StateManager(BigExample)
 
@@ -194,9 +205,11 @@ big_state = big_state_manager.form()""")
 
 with st.expander("Form"):
     from datetime import date
+    from decimal import Decimal
     from enum import Enum
     from typing import Dict
     from typing import List
+    from typing import Optional
 
     import streamlit as st
     from pydantic import BaseModel
@@ -229,20 +242,29 @@ with st.expander("Form"):
 
         positive_int: PositiveInt = 7
         constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
+        very_precise_decimal: Decimal = Decimal("1.23456")
+        undefined_int: Optional[int] = Field(
+            default=None,
+            description="It is _not_ recommended that you leave default values undefined,"
+                        " e.g. `some_field: Optional[int] = None`, or simply `some_field: Optional[int]`."
+                        " That said, Statelit will still try to assign a reasonable default value"
+                        " if the default is `None`."
+        )
 
-        large_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
-        very_large_text: str = Field(
+        large_optional_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
+        very_large_text: Optional[str] = Field(
             title="Very Large Text Area",
             default="Statelit hooks into a lot of Pydantic internals."
                     "\nCheck out all the neat things you can do with Statelit!",
-            streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+            statelit__streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+            statelit__disabled=True,
             description="Find this description of the Pydantic field in the 'help' text for this widget!"
         )
 
         some_date: date = date(2015, 3, 14)
         some_color: Color = "olive"
 
-        some_pydantic_model: SmallModel = SmallModel()
+        some_pydantic_model: Optional[SmallModel] = SmallModel()
 
     big_state_manager = StateManager(BigExample)
 
@@ -255,7 +277,8 @@ with st.expander("State (pretty)"):
 
 
 with st.expander("State (lazy text area)"):
-    st.markdown("Warning: `DateRange` type does not work with lazy text areas.")
+    st.markdown("`DateRange` type and `Optional[T]` do not currently work with `lazy_text_area()`."
+                " Sorry about that.")
     big_state_manager.lazy_text_area(height=300)
 
 
