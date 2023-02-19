@@ -4,8 +4,10 @@ from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Type
 from typing import TypeVar
+from typing import Union
 
 from pydantic import BaseModel
 from pydantic.fields import ModelField
@@ -33,7 +35,7 @@ class StatelitConverterAssociation(Representation):
             converter_name: str,
             callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"],
             fields: List[str] = None,
-            types: List[type] = None
+            types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
     ):
         self.converter_name = converter_name
         self.callback_type = callback_type
@@ -91,7 +93,7 @@ def is_converter_for(
         callback_type: Literal["widget", "to_streamlit", "from_streamlit", "fallback_default_value"],
         *,
         fields: List[str] = None,
-        types: List[type] = None
+        types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
 ) -> Callable[[callable], CallbackConverterType]:
     def _wrap(func: callable) -> CallbackConverterType:
         if not isinstance(func, CallbackConverterType):
@@ -109,7 +111,7 @@ def is_converter_for(
 
 def is_widget_callback_converter_for(
         fields: List[str] = None,
-        types: List[type] = None
+        types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
 ) -> Callable[[callable], CallbackConverterType]:
     return is_converter_for(
         "widget",
@@ -120,7 +122,7 @@ def is_widget_callback_converter_for(
 
 def is_from_streamlit_callback_converter_for(
         fields: List[str] = None,
-        types: List[type] = None
+        types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
 ) -> Callable[[callable], CallbackConverterType]:
     return is_converter_for(
         "from_streamlit",
@@ -131,7 +133,7 @@ def is_from_streamlit_callback_converter_for(
 
 def is_to_streamlit_callback_converter_for(
         fields: List[str] = None,
-        types: List[type] = None
+        types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
 ) -> Callable[[callable], CallbackConverterType]:
     return is_converter_for(
         "to_streamlit",
@@ -146,7 +148,7 @@ def is_to_streamlit_callback_converter_for(
 # I want to maybe fix this at a later date.
 def is_fallback_default_value_converter_for(
         fields: List[str] = None,
-        types: List[type] = None
+        types: List[Union[type, Tuple[type, Tuple[type, ...]]]] = None
 ) -> Callable[[callable], CallbackConverterType]:
     return is_converter_for(
         "fallback_default_value",

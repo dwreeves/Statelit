@@ -12,6 +12,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 from typing import Type
 from typing import Union
 
@@ -19,6 +20,7 @@ import streamlit as st
 from pydantic import BaseModel
 from pydantic.color import Color
 from pydantic.fields import ModelField
+from streamlit.runtime.state.session_state import SessionState
 
 from statelit.field_factory.base import DynamicFieldFactoryBase
 from statelit.field_factory.base import is_fallback_default_value_converter_for
@@ -28,6 +30,9 @@ from statelit.field_factory.base import is_widget_callback_converter_for
 from statelit.json import statelit_encoder
 from statelit.types import DateRange
 from statelit.utils.mro import find_implementation
+from statelit.utils.mro import get_args
+from statelit.utils.mro import get_origin
+from statelit.utils.mro import lenient_issubclass
 
 
 def _modify_kwargs_max_and_min(
@@ -39,14 +44,21 @@ def _modify_kwargs_max_and_min(
     if not conv:
         def conv(x):
             return x
-    if hasattr(field.type_, "le") and field.type_.le is not None:
-        kwargs["max_value"] = conv(field.type_.le)
-    if hasattr(field.type_, "lt") and field.type_.lt is not None:
-        kwargs["max_value"] = conv(field.type_.lt - step)
-    if hasattr(field.type_, "ge") and field.type_.ge is not None:
-        kwargs["min_value"] = conv(field.type_.ge)
-    if hasattr(field.type_, "gt") and field.type_.gt is not None:
-        kwargs["min_value"] = conv(field.type_.gt + step)
+    if get_origin(field.type_) is not None:
+        # Assume assume first type is the type for both.
+        # (Doesn't make a ton of sense to handle both, since both numbers share streamlit widget kwargs)
+        typ = get_args(field.type_)[0]
+    else:
+        typ = field.type_
+
+    if hasattr(typ, "le") and typ.le is not None:
+        kwargs["max_value"] = conv(typ.le)
+    if hasattr(typ, "lt") and typ.lt is not None:
+        kwargs["max_value"] = conv(typ.lt - step)
+    if hasattr(typ, "ge") and typ.ge is not None:
+        kwargs["min_value"] = conv(typ.ge)
+    if hasattr(typ, "gt") and typ.gt is not None:
+        kwargs["min_value"] = conv(typ.gt + step)
     return kwargs
 
 
@@ -83,7 +95,7 @@ def _maybe_extract_streamlit_callable(field: ModelField) -> Optional[callable]:
     return None
 
 
-def _allow_optional(callback: callable, enabled: bool) -> callable:
+def _allow_optional(callback: callable, enabled: bool, session_state: SessionState) -> callable:
     @wraps(callback)
     def _wrapper(*args, **kwargs):
         key = kwargs.pop("key", None)
@@ -93,18 +105,18 @@ def _allow_optional(callback: callable, enabled: bool) -> callable:
         persisted_value_key = f"{key}._persisted_value"
         checkbox_key = f"{key}._enabled"
 
-        if persisted_value_key not in st.session_state:
-            st.session_state[persisted_value_key] = st.session_state[key]
+        if persisted_value_key not in session_state:
+            session_state[persisted_value_key] = session_state[key]
 
-        if checkbox_key not in st.session_state:
-            st.session_state[checkbox_key] = enabled
+        if checkbox_key not in session_state:
+            session_state[checkbox_key] = enabled
 
         is_enabled = st.checkbox(f"Enable {label}", key=checkbox_key, on_change=on_change)
         widget_return_value = callback(*args, **kwargs, key=persisted_value_key, disabled=(not is_enabled))
         if not is_enabled:
-            return_value = st.session_state[key] = None
+            return_value = session_state[key] = None
         else:
-            return_value = st.session_state[key] = widget_return_value
+            return_value = session_state[key] = widget_return_value
         on_change()
         return return_value
     return _wrapper
@@ -124,17 +136,35 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     # Builtin types
     # ==========================================================================
 
+    # TODO: We can set defaults based on constraints, for both simple types and
+    #  tuple[T, T] types. However, here I just take the simplest defaults
+    #  possible. This is not a huge deal, as it is strongly recommended that a
+    #  proper default is set. That said, it would be convenient for some users
+    #  to have more magic defaults.
+
     @is_fallback_default_value_converter_for(types=[int])
     def _default_int(self, **kwargs) -> Callable[[], int]:
         return lambda: 0
+
+    @is_fallback_default_value_converter_for(types=[(tuple, (int, int))])
+    def _default_int_tuple(self, **kwargs) -> Callable[[], Tuple[int, int]]:
+        return lambda: (0, 100)
 
     @is_fallback_default_value_converter_for(types=[float])
     def _default_float(self, **kwargs) -> Callable[[], float]:
         return lambda: 0.0
 
+    @is_fallback_default_value_converter_for(types=[(tuple, (float, float))])
+    def _default_float_tuple(self, **kwargs) -> Callable[[], Tuple[float, float]]:
+        return lambda: (0.0, 1.0)
+
     @is_fallback_default_value_converter_for(types=[Decimal])
     def _default_decimal(self, **kwargs) -> Callable[[], Decimal]:
         return lambda: Decimal("0")
+
+    @is_fallback_default_value_converter_for(types=[(tuple, (Decimal, Decimal))])
+    def _default_decimal_tuple(self, **kwargs) -> Callable[[], Tuple[Decimal, Decimal]]:
+        return lambda: (Decimal("0.00"), Decimal("100.00"))
 
     @is_fallback_default_value_converter_for(types=[list])
     def _default_list(self, **kwargs) -> Callable[[], list]:
@@ -152,29 +182,49 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     def _default_bool(self, **kwargs) -> Callable[[], bool]:
         return lambda: False
 
-    @is_widget_callback_converter_for(types=[int, float, Decimal])
+    @is_widget_callback_converter_for(types=[
+        int, float, Decimal,
+        (tuple, (int, int)),
+        (tuple, (float, float)),
+        (tuple, (Decimal, Decimal)),
+    ])
     def _convert_number(
             self,
-            value: Union[int, float, Decimal],
+            value: Union[int, float, Decimal, tuple],
             field: ModelField,
             model: Type[BaseModel]
     ) -> callable:
-        if hasattr(field.type_, "multiple_of") and field.type_.multiple_of is not None:
+        is_tuple = get_origin(field.type_) is not None
+        if is_tuple:
+            # Assume assume first type is the type for both.
+            # (Doesn't make a ton of sense to handle both, since both numbers share streamlit widget kwargs)
+            typ = get_args(field.type_)[0]
+        else:
+            typ = field.type_
+
+        if hasattr(typ, "multiple_of") and typ.multiple_of is not None:
             step = field.type_.multiple_of
-        elif issubclass(field.type_, float):
+        elif issubclass(typ, float):
             step = 0.01
-        elif issubclass(field.type_, Decimal):
-            step = min(10 ** value.as_tuple().exponent, 1)
+        elif issubclass(typ, Decimal):
+            if is_tuple and value is not None:
+                _v = value[0]
+            else:
+                _v = value
+            if _v is not None:
+                step = min(10 ** _v.as_tuple().exponent, 1)
+            else:
+                step = 1
         else:
             step = 1
 
         kwargs = {"step": step}
 
-        if not issubclass(field.type_, int):
+        if not issubclass(typ, int):
             prec = max(0, abs(int(math.log10(step))))
             kwargs["format"] = f"%.{prec}f"
 
-        kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=step, conv=field.type_)
+        kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=step, conv=typ)
         kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
@@ -183,14 +233,18 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         if streamlit_widget:
             pass
-        elif "max_value" in kwargs and "min_value" in kwargs:
+        elif ("max_value" in kwargs and "min_value" in kwargs) or is_tuple:
             streamlit_widget = st.slider
         else:
             streamlit_widget = st.number_input
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_to_streamlit_callback_converter_for(types=[list, dict])
@@ -230,7 +284,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_from_streamlit_callback_converter_for(types=[list, dict])
@@ -268,7 +326,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_widget_callback_converter_for(types=[bool])
@@ -292,7 +354,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     # ==========================================================================
@@ -355,7 +421,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_widget_callback_converter_for(types=[time])
@@ -380,7 +450,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_to_streamlit_callback_converter_for(types=[datetime])
@@ -441,7 +515,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, options=options, format_func=format_func, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_widget_callback_converter_for(types=[BaseModel])
@@ -465,7 +543,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_to_streamlit_callback_converter_for(types=[BaseModel])
@@ -515,7 +597,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         callback = partial(streamlit_widget, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
     @is_to_streamlit_callback_converter_for(types=[Color])
@@ -537,11 +623,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     # Custom Statelit types
     # ==========================================================================
 
-    @is_fallback_default_value_converter_for(types=[DateRange])
+    @is_fallback_default_value_converter_for(types=[DateRange, (tuple, (date, date))])
     def _default_color(self, **kwargs) -> Callable[[], DateRange]:
         return lambda: DateRange(lower=date.today() - timedelta(days=1), upper=date.today())
 
-    @is_widget_callback_converter_for(types=[DateRange])
+    @is_widget_callback_converter_for(types=[DateRange, (tuple, (date, date))])
     def _convert_date_range(
             self,
             value: Any,
@@ -567,33 +653,42 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
                 stable_value_key = key + "._stable_value"
 
-                if st.session_state[key] is not None and st.session_state[key][1] is not None:
+                if self.session_state[key] is not None and stable_value_key not in self.session_state:
                     # Pretend to be immutable
-                    st.session_state[stable_value_key] = DateRange.convert_to_streamlit(
-                        st.session_state[key],
+                    self.session_state[stable_value_key] = DateRange.convert_to_streamlit(
+                        self.session_state[key],
                         field=field,
                         config=field.model_config,
                         upper_is_optional=False
                     )
 
-                out = st.date_input(**kw, value=st.session_state[stable_value_key])
+                out = st.date_input(**kw, value=self.session_state[stable_value_key])
+                if out != self.session_state[key]:
+                    if lenient_issubclass(field.type_, DateRange) or (len(out) == 2 and out[1] is not None):
+                        self.session_state[key] = out
+                        on_change_callback = kw.pop("on_change")
+                        on_change_callback()
 
-                if out != st.session_state[key]:
-                    st.session_state[key] = out
-                    on_change_callback = kw.pop("on_change")
-                    on_change_callback()
+                    else:
+                        pass
+                elif lenient_issubclass(field.type_, DateRange):
+                    self.session_state[key] = out
                 else:
-                    st.session_state[key] = out
+                    pass
                 return out
             else:
                 return st.date_input(**kw)
 
         callback = partial(remapped_keys, **kwargs)
         if field.allow_none:
-            callback = _allow_optional(callback, enabled=(not kwargs.get("disabled", field.default is None)))
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
         return callback
 
-    @is_to_streamlit_callback_converter_for(types=[DateRange])
+    @is_to_streamlit_callback_converter_for(types=[DateRange, (tuple, (date, date))])
     def _pre_date_range(
             self,
             value: Any,
@@ -606,7 +701,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             return DateRange.validate(x, field=field, config=field.model_config)
         return _callback
 
-    @is_from_streamlit_callback_converter_for(types=[DateRange])
+    @is_from_streamlit_callback_converter_for(types=[DateRange, (tuple, (date, date))])
     def _post_date_range(
             self,
             value: Any,

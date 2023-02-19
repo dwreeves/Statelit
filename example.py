@@ -142,6 +142,7 @@ from enum import Enum
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 import streamlit as st
 from pydantic import BaseModel
@@ -150,7 +151,6 @@ from pydantic import conint
 from pydantic.color import Color
 
 from statelit import StateManager
-from statelit.types import DateRange
 
 class SmallModel(BaseModel):
     a: int = 100
@@ -168,13 +168,17 @@ class BigExample(BaseModel):
 
     example_enum_field: ExampleEnum = 2
 
-    date_range_field: DateRange = ["2022-03-14", "2022-07-04"]
+    # You can also use the statelit.types.DateRange type directly.
+    date_range_field: Tuple[date, date] = ["2022-03-14", "2022-07-04"]
 
     json_data: Dict[str, List[int]] = {"some_key": [4, 5, 6]}
 
-    positive_int: PositiveInt = 7
     constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
+
+    optional_positive_int_range: Optional[Tuple[PositiveInt, PositiveInt]] = (1, 100)
+
     very_precise_decimal: Decimal = Decimal("1.23456")
+
     undefined_int: Optional[int] = Field(
         default=None,
         description="It is _not_ recommended that you leave default values undefined,"
@@ -183,8 +187,9 @@ class BigExample(BaseModel):
                     " if the default is `None`."
     )
 
-    large_optional_text: Optional[str] = "Including a new line in the default\ncauses a `text_area` to appear"
-    very_large_text: str = Field(
+    large_optional_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
+
+    very_large_text: Optional[str] = Field(
         title="Very Large Text Area",
         default="Statelit hooks into a lot of Pydantic internals."
                 "\nCheck out all the neat things you can do with Statelit!",
@@ -194,6 +199,7 @@ class BigExample(BaseModel):
     )
 
     some_date: date = date(2015, 3, 14)
+
     some_color: Color = "olive"
 
     some_pydantic_model: Optional[SmallModel] = SmallModel()
@@ -210,6 +216,7 @@ with st.expander("Form"):
     from typing import Dict
     from typing import List
     from typing import Optional
+    from typing import Tuple
 
     import streamlit as st
     from pydantic import BaseModel
@@ -218,7 +225,6 @@ with st.expander("Form"):
     from pydantic.color import Color
 
     from statelit import StateManager
-    from statelit.types import DateRange
 
     class SmallModel(BaseModel):
         a: int = 100
@@ -236,13 +242,17 @@ with st.expander("Form"):
 
         example_enum_field: ExampleEnum = 2
 
-        date_range_field: DateRange = ["2022-03-14", "2022-07-04"]
+        # You can also use the statelit.types.DateRange type directly.
+        date_range_field: Tuple[date, date] = ["2022-03-14", "2022-07-04"]
 
         json_data: Dict[str, List[int]] = {"some_key": [4, 5, 6]}
 
-        positive_int: PositiveInt = 7
         constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
+
+        optional_positive_int_range: Optional[Tuple[PositiveInt, PositiveInt]] = (1, 100)
+
         very_precise_decimal: Decimal = Decimal("1.23456")
+
         undefined_int: Optional[int] = Field(
             default=None,
             description="It is _not_ recommended that you leave default values undefined,"
@@ -252,6 +262,7 @@ with st.expander("Form"):
         )
 
         large_optional_text: str = "Including a new line in the default\ncauses a `text_area` to appear"
+
         very_large_text: Optional[str] = Field(
             title="Very Large Text Area",
             default="Statelit hooks into a lot of Pydantic internals."
@@ -262,6 +273,7 @@ with st.expander("Form"):
         )
 
         some_date: date = date(2015, 3, 14)
+
         some_color: Color = "olive"
 
         some_pydantic_model: Optional[SmallModel] = SmallModel()

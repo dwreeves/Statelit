@@ -1,14 +1,17 @@
 from datetime import date
 from datetime import datetime
 from datetime import time
+from decimal import Decimal
 from enum import Enum
 from typing import Any
 from typing import Optional
+from typing import Tuple
 from unittest.mock import patch
 
 import pytest
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import PositiveInt
 from pydantic import create_model
 from pydantic.color import Color
 
@@ -36,9 +39,14 @@ def field_factory(session_state):
 field_definitions_and_expected_calls = [
     ((str, "lorem ipsum"), "text_input"),
     ((int, 123), "number_input"),
+    ((PositiveInt, 123), "number_input"),
     ((int, Field(default=123, ge=0)), "number_input"),
+    ((Decimal, Decimal("0.123")), "number_input"),
     ((float, 123.4), "number_input"),
     ((float, Field(default=123.4, ge=0.0)), "number_input"),
+    ((Tuple[float, float], [0.1, 0.99]), "slider"),
+    ((Tuple[PositiveInt, PositiveInt], [1, 99]), "slider"),
+    ((Tuple[Decimal, Decimal], [Decimal("1"), Decimal("99")]), "slider"),
     ((bool, True), "checkbox"),
     ((list, ["a", "b"]), "text_area"),
     ((dict, {"foo": "bar"}), "text_area"),
@@ -49,6 +57,7 @@ field_definitions_and_expected_calls = [
     ((Color, "red"), "color_picker"),
     ((SubModel, SubModel()), "text_area"),
     ((DateRange, ["2022-01-01", "2022-03-14"]), "date_input"),
+    ((Tuple[date, date], ["2022-01-01", "2022-03-14"]), "date_input"),
 ]
 
 

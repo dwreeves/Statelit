@@ -182,6 +182,10 @@ The following implementations are considered **experimental** and are potentiall
 |---|---|---|
 |`datetime.datetime`|`st.date_input`|Time component is always cast to `00:00:00`. For true datetimes, at the moment, it is suggested you use separate `datetime.date` and `datetime.time`s and manually combine them.|
 |`statelit.types.DateRange`|`st.date_input`|Custom type. Currently does not work with lazy state.|
+|`tuple[datetime.date, datetime.date]`|`st.date_input`|Same as DateRange.|
+|`tuple[int, int]`|`st.slider`|In the future, defaults (when default is `None`) and some kwargs will be set more intelligently.|
+|`tuple[float, float]`|`st.slider`|In the future, defaults (when default is `None`) and some kwargs will be set more intelligently.|
+|`tuple[decimal.Decimal, decimal.Decimal]`|`st.slider`|In the future, defaults (when default is `None`) and some kwargs will be set more intelligently.|
 |`list`|`st.text_area`|Unclear if `list` will always be a text area in future versions.|
 |`dict`|`st.text_area`|Unclear if `dict` will always be a text area in future versions.|
 
@@ -221,7 +225,7 @@ A `FieldFactory` is a callable that takes in `(value: Any, field: pydantic.field
 
 - Pydantic 2.x not supported.
 - `ValidationError`s are not handled right now and crash everything. They need to be handled gracefully.
-- `DateRange` type and `Optional[T]` do not currently work with `lazy_text_area()`. Sorry about that.
+- `DateRange` type, `tuple[T, T]` types, and `Optional[T]` do not currently work with `lazy_text_area()`. Sorry about that.
 - Using `flatten=True` for `StateManager.form()` does not sync with text areas and lazy text areas. (Flatten mode is still in development, and should be avoided if you are using text areas.)
 
 # Trademark & Copyright

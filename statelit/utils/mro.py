@@ -19,17 +19,21 @@
 
 from enum import Enum
 from typing import Dict
+from typing import Iterable
+from typing import List
+from typing import Tuple
 from typing import TypeVar
 from typing import Union
 
 from pydantic.utils import get_args
 from pydantic.utils import get_origin
+from pydantic.utils import lenient_issubclass
 
 
 T = TypeVar("T")
 
 
-def extract_type_from_optional(cls: type) -> type:
+def extract_type_from_optional(cls: List[Union[type, Tuple[type, Tuple[type, ...]]]]) -> type:
     """If cls == Optional[T], return T. Else return cls"""
     if get_origin(cls) is Union:
         new_types = list(filter(lambda _: _ is not type(None), get_args(cls)))  # noqa: E721
@@ -107,9 +111,6 @@ def _c3_mro(cls, abcs=None):
     explicit_c3_mros = [_c3_mro(base, abcs=abcs) for base in explicit_bases]
     abstract_c3_mros = [_c3_mro(base, abcs=abcs) for base in abstract_bases]
     other_c3_mros = [_c3_mro(base, abcs=abcs) for base in other_bases]
-    sequences = (
-
-    )
     return _c3_merge(
         [[cls]] + explicit_c3_mros + abstract_c3_mros + other_c3_mros +  # noqa: W504
         [explicit_bases] + [abstract_bases] + [other_bases]
@@ -195,11 +196,23 @@ def find_implementation(cls: type, registry: Dict[type, T]) -> T:
 
     origin = get_origin(cls)
     if origin is not None:
-        cls = origin
+        if issubclass(origin, tuple):
+            args = get_args(cls)
+            cls = args[0]
+            registry = {
+                k[1][0]: v
+                for k, v in registry.items()
+                if isinstance(k, tuple)
+                and len(k) == 2
+                and issubclass(k[0], tuple)
+                and isinstance(k[1], Iterable)
+            }
+        else:
+            cls = origin
 
     # Give priority to Enum implementations
     if issubclass(cls, Enum):
-        _sub_registry = {k: v for k, v in registry.items() if issubclass(k, Enum)}
+        _sub_registry = {k: v for k, v in registry.items() if lenient_issubclass(k, Enum)}
         maybe_find_implementation = _find_impl(cls=cls, registry=_sub_registry)
         if maybe_find_implementation:
             return maybe_find_implementation

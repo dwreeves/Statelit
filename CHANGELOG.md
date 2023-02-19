@@ -1,5 +1,13 @@
 # Changelog
 
+### `0.0.5`
+
+- Added support for `tuple[int, int]`, `tuple[float, float]`, `tuple[decimal.Decimal, decimal.Decimal]`, and `tuple[datetime.date, datetime.date]`. Note: These do not work with lazy state.
+
+Misc. notes:
+
+- It's clear that the lazy state either needs a huge overhaul, or I should be calling `st.warning()` when incompatible types are used.
+
 ### `0.0.4`
 
 - Added support for `Optional[T]` types + a hook for disabling fields.

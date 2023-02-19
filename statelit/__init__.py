@@ -1,7 +1,7 @@
 # flake8: noqa: F401
 """Easy state management in Streamlit with Pydantic."""
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 from . import state
 from . import types
