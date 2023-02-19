@@ -32,7 +32,7 @@ Reasons to use **Statelit**:
    Statelit makes this much easier.
 
 _(Note: Statelit is still under development.
-The current verison is `0.0.3`;
+The current verison is `0.0.5`;
 the first stable release will be version `0.1.0`.)_
 
 # Install
