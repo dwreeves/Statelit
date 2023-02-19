@@ -167,6 +167,7 @@ The following implementations are considered stable:
 |---|---|---|
 |`float`|`st.number_input`||
 |`int`|`st.number_input`||
+|`decimal.Decimal`|`st.number_input`||
 |`str`|`st.text_input` or `st.text_area`|`st.text_area` is used if the default value contains a `\n`; otherwise, `st.text_input` is used.|
 |`enum.Enum`|`st.selectbox`|`st.radio` is also a good choice; set the `streamlit_widget` kwarg in the `Field()` to use that.|
 |`datetime.date`|`st.date_input`||
