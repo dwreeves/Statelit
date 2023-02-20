@@ -1,5 +1,9 @@
 # Changelog
 
+### `0.1.1`
+
+- Fixed minor bug in `dict[any, bool]` implementation
+
 ### `0.1.0`
 
 - Add multiselect support for both `dict[any, bool]` and `set[enum.Enum]` types.

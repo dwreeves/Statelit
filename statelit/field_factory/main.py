@@ -422,7 +422,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
             output = st.multiselect(
                 **kw,
-                options=list(data),
+                options=list(value),
                 default=self.session_state[stable_value_key]
             )
             for k in data:
