@@ -61,6 +61,12 @@ class FieldCallbacks(Representation):
 
 
 class FieldFactoryBase:
+    """
+    `FieldFactoryBase` is the high-level API that the field factory needs to
+    work with the StatelitModel. It is subclassed because other implementations
+    do not include any methods utilized by the StatelitModel; so in theory you
+    could implement the __call__(...) internals however you want.
+    """
     def __init__(self, key_prefix: str, session_state: SessionState):
         self.key_prefix = key_prefix
         self.session_state = session_state

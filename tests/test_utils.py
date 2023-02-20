@@ -1,7 +1,9 @@
 from enum import Enum
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 import pytest
 
@@ -85,6 +87,19 @@ def test_get_next_availble_key_hit_limit():
         (Optional[SomeIntEnum], "enum type"),
         (Optional[Dict[str, str]], "dict type"),
         (Optional[List[int]], "list type"),
+        (Tuple[List[float], Dict[str, int]], "tuple[list[float], dict[str, int]] type"),
+        (Tuple[List[float], Dict[int, int]], "tuple[list[float], dict] type"),
+        (Tuple[List[float], Dict[StringSubtype, int]], "tuple[list[float], dict[str, int]] type"),
+        (Tuple[List[float], Dict[StringSubtype, SomeIntEnum]], "tuple[list[float], dict[str, int]] type"),
+        (Tuple[List[float], Dict[str, float]], "tuple[list[float], dict] type"),
+        (Tuple[List[int], dict], "tuple type"),
+        (Tuple[str, int], "tuple[str, int] type"),
+        (Dict[str, bool], "dict[any, int] type"),
+        (Dict[str, int], "dict[any, int] type"),
+        pytest.param(
+            Dict[str, SomeIntEnum], "dict[any, SomeIntEnum] type",
+            marks=pytest.mark.xfail(reason="MRO not supported")
+        ),
     ]
 )
 def test_find_implementation(input, expected_output):
@@ -99,7 +114,13 @@ def test_find_implementation(input, expected_output):
         A: "A type",
         B: "B type",
         dict: "dict type",
-        list: "list type"
+        list: "list type",
+        tuple: "tuple type",
+        Tuple[str, int]: "tuple[str, int] type",
+        Tuple[List[float], dict]: "tuple[list[float], dict] type",
+        Tuple[List[float], Dict[str, int]]: "tuple[list[float], dict[str, int]] type",
+        Dict[Any, int]: "dict[any, int] type",
+        Dict[Any, SomeIntEnum]: "dict[any, SomeIntEnum] type",
     }
 
     output = find_implementation(input, registry=registry)

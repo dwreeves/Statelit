@@ -31,10 +31,6 @@ Reasons to use **Statelit**:
    a great way to explore how your app works, especially for machine learning and other quantitative applications.
    Statelit makes this much easier.
 
-_(Note: Statelit is still under development.
-The current verison is `0.0.5`;
-the first stable release will be version `0.1.0`.)_
-
 # Install
 
 Via pip:
@@ -175,6 +171,8 @@ The following implementations are considered stable:
 |`pydantic.ConstrainedInt`|`st.slider`|Used when both `ge`/`gt` and `le`/`lt` are set; otherwise, use `st.number_input`|
 |`pydantic.ConstrainedFloat`|`st.slider`|Used when both `ge`/`gt` and `le`/`lt` are set; otherwise, use `st.number_input`|
 |`pydantic.color.Color`|`st.color_picker`|Colors are always converted to hex values.|
+|`dict[any, bool]`|`st.multiselect`|`True` if selected, `False` if not selected.|
+|`Set[enum.Enum]`|`st.multiselect`|All `Enum` members are valid selections; set consists of selected members.|
 
 The following implementations are considered **experimental** and are potentially subject to some future changes:
 
@@ -188,6 +186,7 @@ The following implementations are considered **experimental** and are potentiall
 |`tuple[decimal.Decimal, decimal.Decimal]`|`st.slider`|In the future, defaults (when default is `None`) and some kwargs will be set more intelligently.|
 |`list`|`st.text_area`|Unclear if `list` will always be a text area in future versions.|
 |`dict`|`st.text_area`|Unclear if `dict` will always be a text area in future versions.|
+|`set`|`st.text_area`|Unclear if `set` will always be a text area in future versions.|
 
 ## Notes on internals
 

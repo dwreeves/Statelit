@@ -1,5 +1,10 @@
 # Changelog
 
+### `0.1.0`
+
+- Add multiselect support for both `dict[any, bool]` and `set[enum.Enum]` types.
+- Made `find_implementation()` more sophisticated, allowing it to resolve more complex types.
+
 ### `0.0.5`
 
 - Added support for `tuple[int, int]`, `tuple[float, float]`, `tuple[decimal.Decimal, decimal.Decimal]`, and `tuple[datetime.date, datetime.date]`. Note: These do not work with lazy state.

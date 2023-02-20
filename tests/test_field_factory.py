@@ -3,8 +3,9 @@ from datetime import datetime
 from datetime import time
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Dict
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from unittest.mock import patch
 
@@ -49,6 +50,7 @@ field_definitions_and_expected_calls = [
     ((Tuple[Decimal, Decimal], [Decimal("1"), Decimal("99")]), "slider"),
     ((bool, True), "checkbox"),
     ((list, ["a", "b"]), "text_area"),
+    ((set, {"a", "b"}), "text_area"),
     ((dict, {"foo": "bar"}), "text_area"),
     ((BasicEnum, BasicEnum.A), "selectbox"),
     ((time, time(3, 14, 15)), "time_input"),
@@ -58,6 +60,9 @@ field_definitions_and_expected_calls = [
     ((SubModel, SubModel()), "text_area"),
     ((DateRange, ["2022-01-01", "2022-03-14"]), "date_input"),
     ((Tuple[date, date], ["2022-01-01", "2022-03-14"]), "date_input"),
+    ((Set[BasicEnum], ["A"]), "multiselect"),
+    ((Dict[str, int], {"abc": 123}), "text_area"),
+    ((Dict[str, bool], {"abc": False}), "multiselect"),
 ]
 
 
@@ -74,7 +79,7 @@ field_definitions_and_expected_calls = [
         ((float, Field(default=123.4, ge=0.0, le=1000.0)), "slider")
     ]
 )
-def test_default_field_factory(field_definition, calls, field_factory):
+def test_default_field_factory(field_definition, calls, field_factory, session_state):
     model = create_model("FooModel", bar=field_definition)
     pydantic_obj = model()
 
@@ -86,7 +91,9 @@ def test_default_field_factory(field_definition, calls, field_factory):
             model=type(pydantic_obj)
         )
 
-        statelit_obj.widget()
+        field_factory.session_state["foo"] = statelit_obj.value
+
+        statelit_obj.widget(key="foo")
 
     assert isinstance(statelit_obj, StatefulObjectBase)
     mocked_func.assert_called_once()

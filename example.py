@@ -216,6 +216,7 @@ with st.expander("Form"):
     from typing import Dict
     from typing import List
     from typing import Optional
+    from typing import Set
     from typing import Tuple
 
     import streamlit as st
@@ -250,6 +251,12 @@ with st.expander("Form"):
         constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
 
         optional_positive_int_range: Optional[Tuple[PositiveInt, PositiveInt]] = (1, 100)
+
+        # There are *two* ways to do multiselects: Dict[Any, bool] and Set[Enum].
+
+        multiselect_dict: Dict[str, bool] = {"a": False, "b": True, "c": False, "d": False}
+
+        multiselect_enum: Set[ExampleEnum] = {ExampleEnum.FOO}
 
         very_precise_decimal: Decimal = Decimal("1.23456")
 

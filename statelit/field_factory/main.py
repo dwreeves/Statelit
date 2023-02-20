@@ -12,6 +12,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Type
 from typing import Union
@@ -100,7 +101,7 @@ def _allow_optional(callback: callable, enabled: bool, session_state: SessionSta
     def _wrapper(*args, **kwargs):
         key = kwargs.pop("key", None)
         label = kwargs.get("label", "field")
-        on_change = kwargs.get("on_change")
+        on_change = kwargs.get("on_change", lambda: None)
 
         persisted_value_key = f"{key}._persisted_value"
         checkbox_key = f"{key}._enabled"
@@ -140,13 +141,14 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     #  tuple[T, T] types. However, here I just take the simplest defaults
     #  possible. This is not a huge deal, as it is strongly recommended that a
     #  proper default is set. That said, it would be convenient for some users
-    #  to have more magic defaults.
+    #  to have more magic defaults. Lack of magic defaults can cause errors,
+    #  e.g. a ConstrainedInt that does not allow for `0` as a value.
 
     @is_fallback_default_value_converter_for(types=[int])
     def _default_int(self, **kwargs) -> Callable[[], int]:
         return lambda: 0
 
-    @is_fallback_default_value_converter_for(types=[(tuple, (int, int))])
+    @is_fallback_default_value_converter_for(types=[Tuple[int, int]])
     def _default_int_tuple(self, **kwargs) -> Callable[[], Tuple[int, int]]:
         return lambda: (0, 100)
 
@@ -154,7 +156,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     def _default_float(self, **kwargs) -> Callable[[], float]:
         return lambda: 0.0
 
-    @is_fallback_default_value_converter_for(types=[(tuple, (float, float))])
+    @is_fallback_default_value_converter_for(types=[Tuple[float, float]])
     def _default_float_tuple(self, **kwargs) -> Callable[[], Tuple[float, float]]:
         return lambda: (0.0, 1.0)
 
@@ -162,7 +164,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     def _default_decimal(self, **kwargs) -> Callable[[], Decimal]:
         return lambda: Decimal("0")
 
-    @is_fallback_default_value_converter_for(types=[(tuple, (Decimal, Decimal))])
+    @is_fallback_default_value_converter_for(types=[Tuple[Decimal, Decimal]])
     def _default_decimal_tuple(self, **kwargs) -> Callable[[], Tuple[Decimal, Decimal]]:
         return lambda: (Decimal("0.00"), Decimal("100.00"))
 
@@ -184,9 +186,9 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
     @is_widget_callback_converter_for(types=[
         int, float, Decimal,
-        (tuple, (int, int)),
-        (tuple, (float, float)),
-        (tuple, (Decimal, Decimal)),
+        Tuple[int, int],
+        Tuple[float, float],
+        Tuple[Decimal, Decimal],
     ])
     def _convert_number(
             self,
@@ -204,9 +206,9 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         if hasattr(typ, "multiple_of") and typ.multiple_of is not None:
             step = field.type_.multiple_of
-        elif issubclass(typ, float):
+        elif lenient_issubclass(typ, float):
             step = 0.01
-        elif issubclass(typ, Decimal):
+        elif lenient_issubclass(typ, Decimal):
             if is_tuple and value is not None:
                 _v = value[0]
             else:
@@ -247,8 +249,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             )
         return callback
 
-    @is_to_streamlit_callback_converter_for(types=[list, dict])
-    def _pre_convert_list_or_dict(
+    @is_to_streamlit_callback_converter_for(types=[list, dict, set])
+    def _pre_convert_list_or_dict_or_set(
             self,
             value: int,
             field: ModelField,
@@ -263,8 +265,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
         return _convert
 
-    @is_widget_callback_converter_for(types=[list, dict])
-    def _convert_list_or_dict(
+    @is_widget_callback_converter_for(types=[list, dict, set])
+    def _convert_list_or_dict_or_set(
             self,
             value: int,
             field: ModelField,
@@ -291,14 +293,20 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             )
         return callback
 
-    @is_from_streamlit_callback_converter_for(types=[list, dict])
-    def _post_convert_list_or_dict(
+    @is_from_streamlit_callback_converter_for(types=[list, dict, set])
+    def _post_convert_list_or_dict_or_set(
             self,
             value: int,
             field: ModelField,
             model: Type[BaseModel]
     ):
-        return json.loads
+        def _callback(x):
+            if field.allow_none and x is None:
+                return None
+            if isinstance(x, (list, dict, set)):
+                return x
+            return json.loads(x)
+        return _callback
 
     @is_widget_callback_converter_for(types=[str])
     def _convert_string(
@@ -353,6 +361,110 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             streamlit_widget = st.checkbox
 
         callback = partial(streamlit_widget, **kwargs)
+        if field.allow_none:
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
+        return callback
+
+    @is_to_streamlit_callback_converter_for(types=[Dict[Any, bool], Set[Enum]])
+    def _override_pre_convert_to_identity_func(
+            self,
+            value: int,
+            field: ModelField,
+            model: Type[BaseModel]
+    ):
+        # Usually dict and sets serialized to a string.
+        # In the special cases of Dict[Any, bool] use f(x)=x.
+        # (Note: this is for the multiselect stuff.)
+        return lambda x: x
+
+    @is_to_streamlit_callback_converter_for(types=[Set[Enum]])
+    def _pre_convert_set_of_enums(
+            self,
+            value: int,
+            field: ModelField,
+            model: Type[BaseModel]
+    ):
+        # Maybe should be opening an issue in Streamlit repo here.
+        # But the killer line in multiselect.py is: `default_values = [default_values]`
+        # So instead, convert to list.
+        def _callback(x):
+            if field.allow_none and x is None:
+                return None
+            return list(x)
+        return _callback
+
+    @is_widget_callback_converter_for(types=[Dict[Any, bool]])
+    def _convert_dict_of_bool_values(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        kwargs = {}
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
+        kwargs = _modify_disabled(kwargs=kwargs, field=field)
+
+        def _callback(**kw):
+            key = kw.pop("key")
+            on_change = kw.pop("on_change", lambda: None)
+            data: Dict[Any, bool] = self.session_state[key]
+
+            stable_value_key = key + "._stable_value"
+
+            if self.session_state[key] is not None and stable_value_key not in self.session_state:
+                # Pretend to be immutable
+                self.session_state[stable_value_key] = list(k for k, v in data.items() if v)
+
+            output = st.multiselect(
+                **kw,
+                options=list(data),
+                default=self.session_state[stable_value_key]
+            )
+            for k in data:
+                data[k] = k in output
+            self.session_state[key] = data
+            on_change()
+            return output
+
+        callback = partial(_callback, **kwargs)
+        if field.allow_none:
+            callback = _allow_optional(
+                callback,
+                enabled=(not kwargs.get("disabled", field.default is None)),
+                session_state=self.session_state
+            )
+        return callback
+
+    @is_widget_callback_converter_for(types=[Set[Enum]])
+    def _convert_set_of_enums(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        kwargs = {}
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
+        kwargs = _modify_disabled(kwargs=kwargs, field=field)
+
+        options = [i.value for i in field.type_.__members__.values()]
+
+        def format_func(x):
+            return {v.value: k for k, v in field.type_.__members__.items()}.get(x)
+
+        streamlit_widget = _maybe_extract_streamlit_callable(field=field)
+
+        if streamlit_widget:
+            pass
+        else:
+            streamlit_widget = st.multiselect
+
+        callback = partial(streamlit_widget, options=options, format_func=format_func, **kwargs)
         if field.allow_none:
             callback = _allow_optional(
                 callback,
@@ -623,11 +735,11 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     # Custom Statelit types
     # ==========================================================================
 
-    @is_fallback_default_value_converter_for(types=[DateRange, (tuple, (date, date))])
+    @is_fallback_default_value_converter_for(types=[DateRange, Tuple[date, date]])
     def _default_color(self, **kwargs) -> Callable[[], DateRange]:
         return lambda: DateRange(lower=date.today() - timedelta(days=1), upper=date.today())
 
-    @is_widget_callback_converter_for(types=[DateRange, (tuple, (date, date))])
+    @is_widget_callback_converter_for(types=[DateRange, Tuple[date, date]])
     def _convert_date_range(
             self,
             value: Any,
@@ -644,40 +756,37 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             #
             # Yes, this is extremely hacky. I know. Help me make it better? :)
 
-            key = kw.pop("key", None)
+            key = kw.pop("key")
 
-            if key is not None:
+            # TODO: Fix this??? `.persisted_value` refers to nothing. (Why does it still work???)
+            if key.endswith(".persisted_value"):
+                key = ".".join(key.split(".")[:-1])
 
-                if key.endswith(".persisted_value"):
-                    key = ".".join(key.split(".")[:-1])
+            stable_value_key = key + "._stable_value"
 
-                stable_value_key = key + "._stable_value"
+            if self.session_state[key] is not None and stable_value_key not in self.session_state:
+                # Pretend to be immutable
+                self.session_state[stable_value_key] = DateRange.convert_to_streamlit(
+                    self.session_state[key],
+                    field=field,
+                    config=field.model_config,
+                    upper_is_optional=False
+                )
 
-                if self.session_state[key] is not None and stable_value_key not in self.session_state:
-                    # Pretend to be immutable
-                    self.session_state[stable_value_key] = DateRange.convert_to_streamlit(
-                        self.session_state[key],
-                        field=field,
-                        config=field.model_config,
-                        upper_is_optional=False
-                    )
-
-                out = st.date_input(**kw, value=self.session_state[stable_value_key])
-                if out != self.session_state[key]:
-                    if lenient_issubclass(field.type_, DateRange) or (len(out) == 2 and out[1] is not None):
-                        self.session_state[key] = out
-                        on_change_callback = kw.pop("on_change")
-                        on_change_callback()
-
-                    else:
-                        pass
-                elif lenient_issubclass(field.type_, DateRange):
+            out = st.date_input(**kw, value=self.session_state[stable_value_key])
+            if out != self.session_state[key]:
+                if lenient_issubclass(field.type_, DateRange) or (len(out) == 2 and out[1] is not None):
                     self.session_state[key] = out
+                    on_change = kw.pop("on_change", lambda: None)
+                    on_change()
+
                 else:
                     pass
-                return out
+            elif lenient_issubclass(field.type_, DateRange):
+                self.session_state[key] = out
             else:
-                return st.date_input(**kw)
+                pass
+            return out
 
         callback = partial(remapped_keys, **kwargs)
         if field.allow_none:
@@ -688,7 +797,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             )
         return callback
 
-    @is_to_streamlit_callback_converter_for(types=[DateRange, (tuple, (date, date))])
+    @is_to_streamlit_callback_converter_for(types=[DateRange, Tuple[date, date]])
     def _pre_date_range(
             self,
             value: Any,
@@ -701,7 +810,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             return DateRange.validate(x, field=field, config=field.model_config)
         return _callback
 
-    @is_from_streamlit_callback_converter_for(types=[DateRange, (tuple, (date, date))])
+    @is_from_streamlit_callback_converter_for(types=[DateRange, Tuple[date, date]])
     def _post_date_range(
             self,
             value: Any,
