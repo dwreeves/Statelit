@@ -60,6 +60,7 @@ class AppState(BaseModel):
     size: int = 10_000
     mu: float = 5.0
     sigma: float = 5.0
+    bins: int = 100
     log: bool = False
 
 
@@ -79,7 +80,7 @@ if state.log:
     arr = np.log(arr)
 
 fig, ax = plt.subplots()
-ax.hist(arr, bins=20)
+ax.hist(arr, bins=state.bins)
 
 st.pyplot(fig)
 ```

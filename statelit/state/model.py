@@ -65,7 +65,6 @@ class StatelitModel(StatefulObjectBase[ModelInstanceType]):
             key_prefix=self.base_state_key,
             session_state=self.session_state
         )
-
         self.construct_all_statelit_fields()
 
     def widget(self, **kwargs):

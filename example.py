@@ -142,6 +142,7 @@ from enum import Enum
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 import streamlit as st
@@ -164,6 +165,9 @@ class ExampleEnum(int, Enum):
 
 class BigExample(BaseModel):
 
+    class Config:
+        streamlit_label_generator = lambda x: x.replace("_", " ").title()  # noqa: #731
+
     flag: bool = True
 
     example_enum_field: ExampleEnum = 2
@@ -176,6 +180,12 @@ class BigExample(BaseModel):
     constrained_int: int = Field(default=3, ge=0, le=10, description="Must be 0 to 10.")
 
     optional_positive_int_range: Optional[Tuple[PositiveInt, PositiveInt]] = (1, 100)
+
+    # There are *two* ways to do multiselects: Dict[Any, bool] and Set[Enum].
+
+    multiselect_dict: Dict[str, bool] = {"a": False, "b": True, "c": False, "d": False}
+
+    multiselect_enum: Set[ExampleEnum] = {ExampleEnum.FOO}
 
     very_precise_decimal: Decimal = Decimal("1.23456")
 
@@ -193,8 +203,8 @@ class BigExample(BaseModel):
         title="Very Large Text Area",
         default="Statelit hooks into a lot of Pydantic internals."
                 "\nCheck out all the neat things you can do with Statelit!",
-        statelit__streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
-        statelit__disabled=True,
+        streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+        streamlit_disabled=True,
         description="Find this description of the Pydantic field in the 'help' text for this widget!"
     )
 
@@ -239,6 +249,9 @@ with st.expander("Form"):
 
     class BigExample(BaseModel):
 
+        class Config:
+            streamlit_label_generator = lambda x: x.replace("_", " ").title()  # noqa: #731
+
         flag: bool = True
 
         example_enum_field: ExampleEnum = 2
@@ -274,8 +287,8 @@ with st.expander("Form"):
             title="Very Large Text Area",
             default="Statelit hooks into a lot of Pydantic internals."
                     "\nCheck out all the neat things you can do with Statelit!",
-            statelit__streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
-            statelit__disabled=True,
+            streamlit_widget=lambda **kwargs: st.text_area(height=200, **kwargs),
+            streamlit_disabled=True,
             description="Find this description of the Pydantic field in the 'help' text for this widget!"
         )
 

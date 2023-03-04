@@ -118,9 +118,6 @@ class StateManager(Generic[ModelInstanceType]):
         else:
             key = obj.gen_key(key_suffix=key_suffix)
 
-        if "label" not in kwargs and obj.name is not None:
-            kwargs["label"] = obj.name
-
         obj.commit_key(key=key, state_type="replicated")
 
         apply_delta = partial(self.apply_session_state_delta, key=key, parent=obj.parent or obj)
@@ -246,9 +243,6 @@ class StateManager(Generic[ModelInstanceType]):
 
         self.statelit_model.commit_key(key=key, state_type="lazy")
 
-        if "label" not in kwargs:
-            kwargs["label"] = self.statelit_model.value.__class__.__name__
-
         def apply_delta():
             try:
                 self.statelit_model.value = self.statelit_model.value.parse_raw(self.session_state[key])
@@ -260,6 +254,7 @@ class StateManager(Generic[ModelInstanceType]):
             apply_delta = chain_two_callables(apply_delta, kwargs.pop("on_click"))
 
         s = st.text_area(
+            label=self.statelit_model.name,
             key=key,
             **kwargs
         )

@@ -63,9 +63,20 @@ def _modify_kwargs_max_and_min(
     return kwargs
 
 
-def _modify_kwargs_label(kwargs: Dict[str, Any], field: ModelField) -> Dict[str, Any]:
-    if field.field_info.title:
+def _modify_kwargs_label(kwargs: Dict[str, Any], field: ModelField, model: Type[BaseModel]) -> Dict[str, Any]:
+    field_label = field.field_info.extra.get("streamlit_label")
+    label_generator = (
+        field.field_info.extra.get("streamlit_label_generator")
+        or getattr(model.__config__, "streamlit_label_generator", None)
+    )
+    if field_label:
+        kwargs["label"] = field_label
+    elif label_generator:
+        kwargs["label"] = label_generator(field.name)
+    elif field.field_info.title:
         kwargs["label"] = field.field_info.title
+    elif field.alias:
+        kwargs["label"] = field.alias
     else:
         kwargs["label"] = field.name
     return kwargs
@@ -78,29 +89,29 @@ def _modify_kwargs_help(kwargs: Dict[str, Any], field: ModelField) -> Dict[str, 
 
 
 def _modify_disabled(kwargs: Dict[str, Any], field: ModelField) -> Dict[str, Any]:
-    disabled = field.field_info.extra.get("statelit__disabled")
+    disabled = field.field_info.extra.get("streamlit_disabled")
     if disabled is not None:
         kwargs["disabled"] = disabled
     return kwargs
 
 
 def _maybe_extract_streamlit_callable(field: ModelField) -> Optional[callable]:
-    streamlit_widget = field.field_info.extra.get("statelit__streamlit_widget")
+    streamlit_widget = field.field_info.extra.get("streamlit_widget")
     if streamlit_widget:
         return streamlit_widget
 
-    type_lookup = field.field_info.extra.get("statelit__streamlit_widget_registry")
+    type_lookup = field.field_info.extra.get("streamlit_widget_registry")
     if type_lookup:
         return find_implementation(field.type_, type_lookup)
 
     return None
 
 
-def _allow_optional(callback: callable, enabled: bool, session_state: SessionState) -> callable:
+def _allow_optional(callback: callable, enabled: bool, session_state: SessionState, label: str) -> callable:
     @wraps(callback)
     def _wrapper(*args, **kwargs):
         key = kwargs.pop("key", None)
-        label = kwargs.get("label", "field")
+        label_ = kwargs.get("label", label)
         on_change = kwargs.get("on_change", lambda: None)
 
         persisted_value_key = f"{key}._persisted_value"
@@ -112,8 +123,13 @@ def _allow_optional(callback: callable, enabled: bool, session_state: SessionSta
         if checkbox_key not in session_state:
             session_state[checkbox_key] = enabled
 
-        is_enabled = st.checkbox(f"Enable {label}", key=checkbox_key, on_change=on_change)
-        widget_return_value = callback(*args, **kwargs, key=persisted_value_key, disabled=(not is_enabled))
+        is_enabled = st.checkbox(f"Enable {label_}", key=checkbox_key, on_change=on_change)
+        widget_return_value = callback(
+            *args, **kwargs,
+            key=persisted_value_key,
+            disabled=(not is_enabled),
+            # label_visibility="collapsed"
+        )
         if not is_enabled:
             return_value = session_state[key] = None
         else:
@@ -227,7 +243,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             kwargs["format"] = f"%.{prec}f"
 
         kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=step, conv=typ)
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -245,7 +261,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -273,7 +290,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -289,7 +306,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -316,7 +334,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -337,7 +355,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -349,7 +368,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -365,7 +384,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -394,7 +414,10 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
         def _callback(x):
             if field.allow_none and x is None:
                 return None
-            return list(x)
+            li = [i for i in x]
+            if len(li) >= 1 and isinstance(li[0], Enum):
+                li = [i.value for i in li]
+            return li
         return _callback
 
     @is_widget_callback_converter_for(types=[Dict[Any, bool]])
@@ -405,7 +428,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -422,7 +445,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
             output = st.multiselect(
                 **kw,
-                options=list(value),
+                options=list(value if value is not None else []),
                 default=self.session_state[stable_value_key]
             )
             for k in data:
@@ -436,7 +459,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -448,7 +472,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -469,7 +493,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -520,7 +545,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     ) -> callable:
         kwargs = {}
         kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=timedelta(days=1))
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -536,7 +561,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -549,7 +575,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     ) -> callable:
         kwargs = {}
         kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=timedelta(seconds=1))
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -565,7 +591,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -609,7 +636,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -630,7 +657,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -642,7 +670,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -658,7 +686,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -696,7 +725,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             model: Type[BaseModel]
     ) -> callable:
         kwargs = {}
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
         kwargs = _modify_kwargs_help(kwargs=kwargs, field=field)
         kwargs = _modify_disabled(kwargs=kwargs, field=field)
 
@@ -712,7 +741,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -736,7 +766,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     # ==========================================================================
 
     @is_fallback_default_value_converter_for(types=[DateRange, Tuple[date, date]])
-    def _default_color(self, **kwargs) -> Callable[[], DateRange]:
+    def _default_date_range(self, **kwargs) -> Callable[[], DateRange]:
         return lambda: DateRange(lower=date.today() - timedelta(days=1), upper=date.today())
 
     @is_widget_callback_converter_for(types=[DateRange, Tuple[date, date]])
@@ -748,7 +778,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
     ) -> callable:
         kwargs = {}
         kwargs = _modify_kwargs_max_and_min(kwargs=kwargs, field=field, step=timedelta(days=1))
-        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field)
+        kwargs = _modify_kwargs_label(kwargs=kwargs, field=field, model=model)
 
         def remapped_keys(**kw):
             # Unfortunately key=? does not work with a date range for st.date_input
@@ -758,8 +788,7 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
 
             key = kw.pop("key")
 
-            # TODO: Fix this??? `.persisted_value` refers to nothing. (Why does it still work???)
-            if key.endswith(".persisted_value"):
+            if key.endswith("._persisted_value"):
                 key = ".".join(key.split(".")[:-1])
 
             stable_value_key = key + "._stable_value"
@@ -793,7 +822,8 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             callback = _allow_optional(
                 callback,
                 enabled=(not kwargs.get("disabled", field.default is None)),
-                session_state=self.session_state
+                session_state=self.session_state,
+                label=kwargs.get("label")
             )
         return callback
 
@@ -810,8 +840,23 @@ class DefaultFieldFactory(DynamicFieldFactoryBase):
             return DateRange.validate(x, field=field, config=field.model_config)
         return _callback
 
-    @is_from_streamlit_callback_converter_for(types=[DateRange, Tuple[date, date]])
+    @is_from_streamlit_callback_converter_for(types=[DateRange])
     def _post_date_range(
+            self,
+            value: Any,
+            field: ModelField,
+            model: Type[BaseModel]
+    ) -> callable:
+        def _callback(x):
+            if field.allow_none and x is None:
+                return None
+            res = DateRange.validate(x, field=field, config=field.model_config)
+            # print("post", res)
+            return res
+        return _callback
+
+    @is_from_streamlit_callback_converter_for(types=[DateRange, Tuple[date, date]])
+    def _post_tuple_of_dates(
             self,
             value: Any,
             field: ModelField,

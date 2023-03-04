@@ -1,5 +1,9 @@
 # Changelog
 
+### `0.1.2`
+
+- Changed how labels are created and assigned for widgets.
+
 ### `0.1.1`
 
 - Fixed minor bug in `dict[any, bool]` implementation
